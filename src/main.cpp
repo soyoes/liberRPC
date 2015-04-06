@@ -55,7 +55,7 @@ vector<string> str_split(char* str,const char* delim){
 
 int curl(string url, string data){
   //FIXME support other HTTP methods 
-  string cmd = "curl --data '"+data+"' -X GET -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
+  string cmd = "curl --data '"+data+"' -X POST -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
   FILE * f = popen( cmd.c_str(), "r" );
   if(f == 0){
     cout << "ERR : Failed to exec curl()" << endl;

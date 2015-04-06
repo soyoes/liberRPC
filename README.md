@@ -28,3 +28,11 @@ Support JSON-RPC spec and simple command line mode.
   $ add http://example.dev/ data1=1&data2=2
   $ quit
   ```
+
+### Tasks
+
+* task persistence
+* multi-thread support of tasks listener.
+* complicated data structure support (such as json)
+* callback http method (POST only now)
+* support JSON-RPC on both listener & worker.
