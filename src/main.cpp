@@ -53,6 +53,24 @@ vector<string> str_split(char* str,const char* delim){
     return result;
 }
 
+int curl(string url, string data){
+  //FIXME support other HTTP methods 
+  string cmd = "curl --data '"+data+"' -X GET -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
+  FILE * f = popen( cmd.c_str(), "r" );
+  if(f == 0){
+    cout << "ERR : Failed to exec curl()" << endl;
+    return 1;
+  }
+  const int BUFSIZE = 100;
+  char buffer[ BUFSIZE ];
+  fgets( buffer, BUFSIZE,  f );
+  string msg = (strcmp(buffer,"200")==0)? "Success":"Error";
+  cout << "Task : " << msg <<endl;
+
+  pclose(f);
+  return 0;
+}
+
 void * task_worker(void *d){
   //assert(!tasks.empty());
   //read new tasks
@@ -62,6 +80,7 @@ void * task_worker(void *d){
     json_rpc_req req = (struct json_rpc_req) tasks.front();
     tasks.pop();
     cout << "task_worker : " << req.method << " - " << req.params << endl;
+    curl (req.method, req.params);
     //@TODO exec req.
   }
   usleep(interval*5000);
@@ -69,6 +88,7 @@ void * task_worker(void *d){
   //pthread_exit(NULL);
   return 0;
 }
+
 
 
 void add_queue(string url,string data){
@@ -80,6 +100,10 @@ void add_queue(string url,string data){
     .method=url,
     .params=data
   });
+}
+
+void json_rpc_callback (json_rpc_res res){
+  //TODO send json_rpc_res to the client server.
 }
 
 
@@ -168,7 +192,7 @@ int main(){
  
       /* http or socket-client */
       if(regex_match(first_row,sm,http_pattern)){ //HTTP REQUEST
-        cout << "HTTP REQ" << endl;
+        // cout << "HTTP REQ" << endl;
         words = str_split(const_cast<char*>(rows.back().c_str())," ");
         //TODO check length
         add_queue(words[1],words[2]);
@@ -177,7 +201,7 @@ int main(){
         // close(c_sock);
         c_closed=1;
       } else { //COMMAND, socket client
-        cout << "CMD REQ" << endl;
+        // cout << "CMD REQ" << endl;
         words = str_split(const_cast<char*>(first_row.c_str())," ");
         string first_keyword = words[0];
         if(first_keyword.compare("quit")==0){ // QUIT

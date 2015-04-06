@@ -19,12 +19,12 @@ Support JSON-RPC spec and simple command line mode.
   
 * HTTP curl 
   ```Bash
-  > curl --data 'add http://localhost/test.php data=1&data2=2' 127.0.0.1:8511
+  > curl --data 'add http://example.dev/ arg1=1&arg2=2' 127.0.0.1:8511
   ```
 
 * Telnet 
   ```Bash
   > telnet 127.0.0.1 8511
-  $ add http://localhost/test.php data=1&data2=2
+  $ add http://example.dev/ data1=1&data2=2
   $ quit
   ```
