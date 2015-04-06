@@ -1,12 +1,12 @@
 # liberRPC
 A task queue, RPC server written in CPP.<BR>
 for the purpose of background/asynchronized/time-consuming tasks<BR>
-Support JSON-RPC spec.
+Support JSON-RPC spec and simple command line mode.
 
 ## Install (MacOS)
 ```
-> g++ main.cpp -o liber_queue_server -Wall -Wextra -std=c++11
-> ./liber_queue_server
+> g++ main.cpp -o liber_rpc_server -Wall -Wextra -std=c++11
+> ./liber_rpc_server
 ```
 
 ## Usage
