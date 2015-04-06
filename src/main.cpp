@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <vector>
 #include <regex>
+#include <queue> 
 
 using namespace std;
 
@@ -27,35 +28,58 @@ pthread_t task_runner_thread;
 unsigned int interval=1000;
 int s_sock;
 
+struct json_rpc_req {
+  int id;
+  string method;
+  string params;
+};
+
+struct json_rpc_res {
+  int id;
+  string success;
+  string error;
+};
+
+std::queue<json_rpc_req> tasks;
 
 vector<string> str_split(char* str,const char* delim){
     char* saveptr;
     char* token = strtok_r(str,delim,&saveptr);
-
     vector<string> result;
-
-    while(token != NULL)
-    {
+    while(token != NULL){
         result.push_back(token);
         token = strtok_r(NULL,delim,&saveptr);
     }
     return result;
 }
 
-
 void * task_worker(void *d){
-  //TODO read new tasks
-  //TODO exec tasks
-  //cout <<"Task Runner Start" << endl;
-  //pthread_exit(NULL);
-  usleep(interval*1000);
+  //assert(!tasks.empty());
+  //read new tasks
+  if(tasks.empty()){
+    cout << "task_worker : NO Task "  << endl;  
+  }else{
+    json_rpc_req req = (struct json_rpc_req) tasks.front();
+    tasks.pop();
+    cout << "task_worker : " << req.method << " - " << req.params << endl;
+    //@TODO exec req.
+  }
+  usleep(interval*5000);
   task_worker(d);
+  //pthread_exit(NULL);
+  return 0;
 }
 
 
 void add_queue(string url,string data){
-  cout << "add_queue URL = " << url << endl;
-  cout << "add_queue DATA = " << data << endl;
+  // cout << "add_queue URL = " << url << endl;
+  // cout << "add_queue DATA = " << data << endl;
+  // @TODO save to somewhere
+  tasks.push((json_rpc_req){
+    .id=0, //FIXME,id
+    .method=url,
+    .params=data
+  });
 }
 
 
@@ -120,7 +144,6 @@ int main(){
   socklen_t c_addr_size=sizeof(c_addr);
 
   while(1){
-
     char *msg;
     string cmd;
 
@@ -140,6 +163,8 @@ int main(){
       vector<string> rows = str_split(buffer,"\r\n");
       string first_row(rows.front());
       vector<string> words;
+
+      //TODO add suport of JSON-RPC call and JSON-RPC response.
  
       /* http or socket-client */
       if(regex_match(first_row,sm,http_pattern)){ //HTTP REQUEST
