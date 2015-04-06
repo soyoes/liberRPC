@@ -1,7 +1,7 @@
 # liberRPC
-A task queue, RPC server written in CPP.<BR>
+A very simple task queue, RPC server written in CPP.<BR>
 for the purpose of background/asynchronized/time-consuming tasks<BR>
-Support JSON-RPC spec and simple command line mode.
+Support HTTP / JSON-RPC specs and a simple command line mode.
 
 ## Install (MacOS)
 ```
