@@ -1,5 +1,7 @@
-# liberTaskQueue
-a CPP task queue server for web server background/asynchronized task such as PHP
+# liberRPC
+A task queue, RPC server written in CPP.<BR>
+for the purpose of background/asynchronized/time-consuming tasks<BR>
+Support JSON-RPC spec.
 
 ## Install (MacOS)
 ```
