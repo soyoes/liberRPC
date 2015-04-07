@@ -32,7 +32,6 @@ Support HTTP / JSON-RPC specs and a simple command line mode.
 ### Tasks
 
 * task persistence
-* multi-thread support of tasks listener.
 * complicated data structure support (such as json)
 * callback http method (POST only now)
 * support JSON-RPC on both listener & worker.
