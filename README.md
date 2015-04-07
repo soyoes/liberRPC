@@ -3,6 +3,12 @@ A very simple task queue, RPC server written in CPP.<BR>
 for the purpose of background/asynchronized/time-consuming tasks<BR>
 Support HTTP / JSON-RPC specs and a simple command line mode.
 
+# Main features
+* multiple thread listener
+* support HTTP / socket call
+* callback with HTTP protocal
+* task persistence.
+
 ## Install (MacOS)
 ```
 > g++ main.cpp -o liber_rpc_server -Wall -Wextra -std=c++11
@@ -31,7 +37,6 @@ Support HTTP / JSON-RPC specs and a simple command line mode.
 
 ### Tasks
 
-* task persistence
 * complicated data structure support (such as json)
 * callback http method (POST only now)
 * support JSON-RPC on both listener & worker.

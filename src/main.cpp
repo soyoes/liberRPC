@@ -16,6 +16,7 @@
 #include <queue> 
 #include <chrono>
 #include <array>
+#include <fstream>
 
 using namespace std;
 
@@ -23,6 +24,7 @@ using namespace std;
 #define CLIENT_INPUT_LIMIT      1024
 #define LISTENER_WORKER_LIMIT   10
 #define LISTENER_WORKER_INERVAL 5000
+#define DB_FILE                 "tasks.data"
 
 struct json_rpc_req {
   int id;
@@ -40,6 +42,7 @@ int       s_sock;
 thread    runner;
 array<int,LISTENER_WORKER_LIMIT>     listeners_stats;
 queue<json_rpc_req> tasks;
+ofstream  fout;
 
 
 vector<string> str_split(char* str,const char* delim);
@@ -48,10 +51,12 @@ void  runner_start();
 void  runner_worker();
 void  listener_start(int c_sork);
 void  listener_worker(int c_sock, int thread_idx);
-void  add_queue(string url,string data);
-// void  json_rpc_callback (json_rpc_res res);
+void  add_queue(string url,string data,bool sync_file);
 void  server_start();
 void  server_stop();
+void data_clear();
+void data_puts(json_rpc_req req);
+void data_gets();
 
 
 vector<string> str_split(char* str,const char* delim){
@@ -73,7 +78,7 @@ int curl(string url, string data){
   string cmd = "curl --data '"+data+"' -X POST -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
   FILE * f = popen( cmd.c_str(), "r" );
   if(f == 0){
-    cout << "ERR : Failed to exec curl()" << endl;
+    cout << "ERR : Failed to exec curl(), " << url << endl;
     return 1;
   }
   const int BUFSIZE = 100;
@@ -94,11 +99,21 @@ void runner_worker(){
   if(tasks.empty()){
     cout << "runner_worker : NO Task "  << endl;  
   }else{
+    std::vector<json_rpc_req> errs;
     while(!tasks.empty()){
       json_rpc_req req = (struct json_rpc_req) tasks.front();
       tasks.pop();
       cout << "runner_worker : " << req.method << " - " << req.params << endl;
-      curl (req.method, req.params);
+      int res = curl (req.method, req.params);
+      if(res==1)//failed
+        errs.push_back(req);
+    }
+    data_clear();
+    if(!errs.empty()){
+      for(json_rpc_req o : errs){
+        add_queue(o.method, o.params,true);
+      }
+      vector<json_rpc_req>().swap(errs); //free memory
     }
   }
   //usleep(LISTENER_WORKER_INERVAL * 1000);
@@ -162,7 +177,7 @@ void listener_worker(int c_sock, int thread_idx){
       // cout << "HTTP REQ" << endl;
       words = str_split(const_cast<char*>(rows.back().c_str())," ");
       //TODO check length
-      add_queue(words[1],words[2]);
+      add_queue(words[1],words[2],true);
       msg = (char*)"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nOK";
       send(c_sock, msg, strlen(msg), 0);  
       // close(c_sock);
@@ -179,7 +194,7 @@ void listener_worker(int c_sock, int thread_idx){
       }else if(first_keyword.compare("add")==0){ //ADD 
         msg = (char*)"> ADD";
         send(c_sock, msg, strlen(msg), 1);  
-        add_queue(words[1],words[2]);
+        add_queue(words[1],words[2],true);
       }else{ //UNKOWN CMD
         cout << "ERR:What ? " << first_row << endl;
         msg = (char*)"> WHAT?";
@@ -194,14 +209,45 @@ void listener_worker(int c_sock, int thread_idx){
 }
 
 
-void add_queue(string url,string data){
-  // @TODO save to somewhere
-  tasks.push((json_rpc_req){
+void add_queue(string url,string data,bool sync_file){
+  json_rpc_req req = (json_rpc_req){
     .id=0, //FIXME,id
     .method=url,
     .params=data
-  });
+  };
+  tasks.push(req);
+  if(sync_file)
+    data_puts(req);
 }
+
+void data_clear(){
+  std::ofstream ofs;
+  ofs.open(DB_FILE, std::ofstream::out | std::ofstream::trunc);
+  ofs.close();
+}
+
+/**
+ * save tasks to data file.
+ * @param data : request data
+ */
+void data_puts(json_rpc_req req){
+  fout << req.method << " " << req.params << endl;
+}
+
+/**
+ * check data file of the last time. and load to tasks queue
+ */
+void data_gets(){
+  ifstream fin(DB_FILE);
+  if(fin.is_open()){//file exists
+    string line;
+    while (getline(fin, line)){
+      vector<string> words = str_split(const_cast<char*>(line.c_str())," ");
+      add_queue(words[0],words[1],false);
+    }
+  }
+}
+
 
 void server_start(){
   s_sock = socket(AF_INET,SOCK_STREAM,0); //server socket
@@ -228,16 +274,18 @@ void server_start(){
   cout << "RPC server start listening ..." <<endl;
 }
 
-void server_mainloop(){
-
-}
-
 void server_stop(){
   close(s_sock);
 }
 
 int main(){
 
+  //check data file of the last time. and load to tasks queue
+  data_gets();
+
+  //init file handler
+  fout = ofstream(DB_FILE);
+  
   //create task runner worker thread.
   runner = thread(runner_worker);
   runner.detach(); //run as deamon
@@ -247,12 +295,11 @@ int main(){
 
   //start server socket
   server_start();
-
-  int c_sock;
+  
   sockaddr_in c_addr;
   socklen_t c_addr_size=sizeof(c_addr);
   while(true){
-    c_sock = accept(s_sock,(struct sockaddr *)&c_addr,&c_addr_size);
+    int c_sock = accept(s_sock,(struct sockaddr *)&c_addr,&c_addr_size);
     lister_start(c_sock);
   }
 }
