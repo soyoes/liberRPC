@@ -17,10 +17,14 @@
 #include <chrono>
 #include <array>
 #include <fstream>
+#include <unordered_map>
 
 using namespace std;
 
-#define PORT                    8511
+//#define PORT                    8511
+
+u_short PORT = 8511;
+
 #define CLIENT_INPUT_LIMIT      1024
 #define LISTENER_WORKER_LIMIT   10
 #define LISTENER_WORKER_INERVAL 5000
@@ -29,7 +33,7 @@ using namespace std;
 struct json_rpc_req {
   int id;
   string method;
-  string params;
+  unordered_map<string,string> params;
 };
 
 struct json_rpc_res {
@@ -46,36 +50,35 @@ ofstream  fout;
 
 
 vector<string> str_split(char* str,const char* delim);
-int   curl(string url, string data);
+int   curl(string url, string data, string method);
 void  runner_start();
 void  runner_worker();
 void  listener_start(int c_sork);
 void  listener_worker(int c_sock, int thread_idx);
-void  add_queue(string url,string data,bool sync_file);
+void  add_queue(string url,string data, string method, bool sync_file);
 void  server_start();
 void  server_stop();
-void data_clear();
-void data_puts(json_rpc_req req);
-void data_gets();
+void  data_clear();
+void  data_puts(json_rpc_req req);
+void  data_gets();
 
 
 vector<string> str_split(char* str,const char* delim){
-    char* saveptr;
-    char* token = strtok_r(str,delim,&saveptr);
-    vector<string> result;
-    while(token != NULL){
-        result.push_back(token);
-        token = strtok_r(NULL,delim,&saveptr);
-    }
-    return result;
+  char* saveptr;
+  char* token = strtok_r(str,delim,&saveptr);
+  vector<string> result;
+  while(token != NULL){
+    result.push_back(token);
+    token = strtok_r(NULL,delim,&saveptr);
+  }
+  return result;
 }
 
 /**
 * call remote server while worker start to exec 
 */
-int curl(string url, string data){
-  //FIXME support other HTTP methods 
-  string cmd = "curl --data '"+data+"' -X POST -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
+int curl(string url, string data, string method){
+  string cmd = "curl --data '"+data+"' -X "+method+" -s -o /tmp/liber_rpc_tmp.html -w '%{http_code}' "+url;
   FILE * f = popen( cmd.c_str(), "r" );
   if(f == 0){
     cout << "ERR : Failed to exec curl(), " << url << endl;
@@ -103,15 +106,15 @@ void runner_worker(){
     while(!tasks.empty()){
       json_rpc_req req = (struct json_rpc_req) tasks.front();
       tasks.pop();
-      cout << "runner_worker : " << req.method << " - " << req.params << endl;
-      int res = curl (req.method, req.params);
+      cout << "runner_worker : " << req.method << req.params["value"] << req.params["method"] << endl;
+      int res = curl (req.method, req.params["value"], req.params["method"]);
       if(res==1)//failed
         errs.push_back(req);
     }
     data_clear();
     if(!errs.empty()){
       for(json_rpc_req o : errs){
-        add_queue(o.method, o.params,true);
+        add_queue(o.method, o.params["value"], o.params["method"],true);
       }
       vector<json_rpc_req>().swap(errs); //free memory
     }
@@ -124,7 +127,7 @@ void runner_worker(){
 /*
  * start a new listenr thread. 
  */
-void lister_start(int c_sock){
+ void lister_start(int c_sock){
   int assigned = 0;
   for(int i=0;i<LISTENER_WORKER_LIMIT;i++){
     if(listeners_stats[i]==0){
@@ -157,7 +160,7 @@ void listener_worker(int c_sock, int thread_idx){
   int c_closed = 0;
   //client inputs 
   char buffer[CLIENT_INPUT_LIMIT];
- 
+
   while (c_closed==0){
 
     if(recv(c_sock, buffer, CLIENT_INPUT_LIMIT, 0)<=0)
@@ -176,14 +179,14 @@ void listener_worker(int c_sock, int thread_idx){
     if(regex_match(first_row,sm,http_pattern)){ //HTTP REQUEST
       // cout << "HTTP REQ" << endl;
       words = str_split(const_cast<char*>(rows.back().c_str())," ");
-      //TODO check length
-      add_queue(words[1],words[2],true);
+      if(3==words.size()) words.push_back("GET");
+      //TODO check values of words elements.
+      add_queue(words[1],words[2], words[3], true);
       msg = (char*)"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\nOK";
       send(c_sock, msg, strlen(msg), 0);  
       // close(c_sock);
       c_closed=1;
     } else { //COMMAND, socket client
-      // cout << "CMD REQ" << endl;
       words = str_split(const_cast<char*>(first_row.c_str())," ");
       string first_keyword = words[0];
       if(first_keyword.compare("quit")==0){ // QUIT
@@ -194,7 +197,8 @@ void listener_worker(int c_sock, int thread_idx){
       }else if(first_keyword.compare("add")==0){ //ADD 
         msg = (char*)"> ADD";
         send(c_sock, msg, strlen(msg), 1);  
-        add_queue(words[1],words[2],true);
+        if(3==words.size()) words.push_back("GET");
+        add_queue(words[1],words[2],words[3],true);
       }else{ //UNKOWN CMD
         cout << "ERR:What ? " << first_row << endl;
         msg = (char*)"> WHAT?";
@@ -209,11 +213,11 @@ void listener_worker(int c_sock, int thread_idx){
 }
 
 
-void add_queue(string url,string data,bool sync_file){
+void add_queue(string url,string data, string method, bool sync_file){
   json_rpc_req req = (json_rpc_req){
     .id=0, //FIXME,id
     .method=url,
-    .params=data
+    .params={{"value",data},{"method",method}}
   };
   tasks.push(req);
   if(sync_file)
@@ -230,20 +234,23 @@ void data_clear(){
  * save tasks to data file.
  * @param data : request data
  */
-void data_puts(json_rpc_req req){
-  fout << req.method << " " << req.params << endl;
+ void data_puts(json_rpc_req req){
+  cout << req.method << " " << req.params["value"] << " " << req.params["method"] << endl;
+  fout << req.method << " " << req.params["value"] << " " << req.params["method"] << endl;
 }
 
 /**
  * check data file of the last time. and load to tasks queue
  */
-void data_gets(){
+ void data_gets(){
   ifstream fin(DB_FILE);
   if(fin.is_open()){//file exists
     string line;
+    if(fin.good())
     while (getline(fin, line)){
+      cout << line << endl;
       vector<string> words = str_split(const_cast<char*>(line.c_str())," ");
-      add_queue(words[0],words[1],false);
+      add_queue(words[0],words[1],words[2],false);
     }
   }
 }
@@ -251,25 +258,25 @@ void data_gets(){
 
 void server_start(){
   s_sock = socket(AF_INET,SOCK_STREAM,0); //server socket
-  if(s_sock == -1){
-      cout << "ERR : Failed to create server socket" << endl;
-      exit(-1);
+  if(s_sock < 0){
+    cout << "ERR : Failed to create server socket" << endl;
+    exit(EXIT_FAILURE);
   }
   //define server socket
   struct sockaddr_in s_addr; //server addr & client addr
-  bzero((char *)&s_addr,sizeof(s_addr));
+  //bzero((char *)&s_addr,sizeof(s_addr));
   s_addr.sin_family=AF_INET;
   s_addr.sin_port=htons(PORT);
-  s_addr.sin_addr.s_addr=INADDR_ANY;
+  s_addr.sin_addr.s_addr=htonl(INADDR_ANY);
 
   if(::bind(s_sock,(struct sockaddr *)&s_addr,sizeof(s_addr))<0){
-      cout << "ERR : Failed to ::bind()" <<endl;
-      exit(-1);
+    cout << "ERR : Failed to ::bind()" <<endl;
+    exit(EXIT_FAILURE);
   }
 
   if (::listen(s_sock, 50) == -1){
-      cout << "ERR : ::listen() error" <<endl;
-      exit(-1);
+    cout << "ERR : ::listen() error" <<endl;
+    exit(-1);
   }
   cout << "RPC server start listening ..." <<endl;
 }

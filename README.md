@@ -38,5 +38,4 @@ Support HTTP / JSON-RPC specs and a simple command line mode.
 ### Tasks
 
 * complicated data structure support (such as json)
-* callback http method (POST only now)
 * support JSON-RPC on both listener & worker.
